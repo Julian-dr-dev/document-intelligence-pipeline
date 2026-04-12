@@ -76,4 +76,13 @@ def encode_page(processor, page:Dict) -> Dict:
     encoding = {k: v.to(DEVICE) for k, v in encoding.items()}
     return encoding
 
-#def run_inference(model, encoding: Dict) -> torch.Tensor:
+def run_inference(model, encoding: Dict) -> torch.Tensor:
+
+    with torch.no_grad():
+        outputs = model(**encoding)
+
+    predictions = outputs.logits.squeeze(0).argmax(dim=1)
+
+    return predictions
+
+
