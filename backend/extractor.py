@@ -85,4 +85,87 @@ def run_inference(model, encoding: Dict) -> torch.Tensor:
 
     return predictions
 
+def decode_predictions(processor, encoding: Dict, predictions: torch.Tensor, page: Dict) -> List[Dict]:
+
+    pred_ids = predictions.cpu().tolist()
+
+    word_ids = encoding.word_ids(batch_index=0)
+
+    words  = page["words"]
+    boxes  = page["boxes"]
+
+    labeled = []
+    seen_word_ids = set()
+
+    for tok_idx, word_idx in enumerate(word_ids):
+
+        
+        if word_idx is None:
+            continue
+
+        if word_idx is seen_word_ids:
+            continue
+
+        seen_word_ids.add(word_idx)
+
+        if word_idx >= len(words):
+            continue
+        label_id = pred_ids[token_idx]
+        label    = ID2LABEL.get(label_id, "O")
+ 
+        labeled.append({
+            "word":  words[word_idx],
+            "label": label,
+            "box":   boxes[word_idx],
+        })
+ 
+    return labeled
+
+
+
+
+
+
+
+
+
+
+
+
+#Testing:
+
+if __name__ == "__main__":
+    import sys
+    from pipeline import process_document
+ 
+    if len(sys.argv) < 2:
+        print("Usage: python extractor.py <path_to_pdf>")
+        sys.exit(1)
+ 
+    pdf_path = sys.argv[1]
+ 
+    # Load model
+    processor, model = load_extractor()
+ 
+    # Run pipeline
+    pages = process_document(pdf_path)
+ 
+    # Extract from first page
+    result = extract_from_page(processor, model, pages[0])
+ 
+    print("\n--- Extracted Fields ---")
+    for field, value in result["fields"].items():
+        print(f"  {field:15} : {value}")
+ 
+    print("\n--- Labeled Words (first 20) ---")
+    for item in result["labeled_words"][:20]:
+        print(f"  {item['label']:15} : {item['word']}")
+ 
+
+
+
+
+
+
+
 
