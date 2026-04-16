@@ -85,6 +85,8 @@ def run_inference(model, encoding: Dict) -> torch.Tensor:
 
     return predictions
 
+
+
 def decode_predictions(processor, encoding: Dict, predictions: torch.Tensor, page: Dict) -> List[Dict]:
 
     pred_ids = predictions.cpu().tolist()
@@ -123,8 +125,89 @@ def decode_predictions(processor, encoding: Dict, predictions: torch.Tensor, pag
 
 
 
+def extract_fields(labeled_words: List[Dict]) -> Dict[str, str]:
+    fields = {
+        "vendor":      "",
+        "date":        "",
+        "invoice_num": "",
+        "total":       "",
+        "address":     "",
+    }
+ 
+    # Map label prefix → field key
+    LABEL_TO_FIELD = {
+        "VENDOR":      "vendor",
+        "DATE":        "date",
+        "INVOICE_NUM": "invoice_num",
+        "TOTAL":       "total",
+        "ADDRESS":     "address",
+    }
+ 
+    for item in labeled_words:
+        label = item["label"]
+        word  = item["word"]
+ 
+        # Skip non-field tokens
+        if label == "O":
+            continue
+ 
+        # Split "B-DATE" into ("B", "DATE") or "I-VENDOR" into ("I", "VENDOR")
+        parts = label.split("-", 1)
+        if len(parts) != 2:
+            continue
+ 
+        bio_tag, field_name = parts
+        field_key = LABEL_TO_FIELD.get(field_name)
+ 
+        if not field_key:
+            continue
+ 
+        if bio_tag == "B":
+            # B tag — start a new value for this field
+            # If the field already has a value, keep only the first occurrence
+            if not fields[field_key]:
+                fields[field_key] = word
+        elif bio_tag == "I":
+            # I tag — append this word to the existing field value
+            if fields[field_key]:
+                fields[field_key] += " " + word
+ 
+    return fields
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+# 6. FULL EXTRACTION PIPELINE
+# ─────────────────────────────────────────────────────────────────────────────
+def extract_from_page(processor, model, page: Dict) -> Dict:
+    
+    print(f"  [extractor] Encoding page {page['page']}...")
+    encoding = encode_page(processor, page)
+ 
+    print(f"  [extractor] Running inference...")
+    predictions = run_inference(model, encoding)
+ 
+    print(f"  [extractor] Decoding predictions...")
+    labeled_words = decode_predictions(processor, encoding, predictions, page)
+ 
+    print(f"  [extractor] Extracting fields...")
+    fields = extract_fields(labeled_words)
+ 
+    return {
+        "page":          page["page"],
+        "fields":        fields,
+        "labeled_words": labeled_words,
+    }
 
 
 
