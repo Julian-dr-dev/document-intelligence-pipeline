@@ -87,18 +87,7 @@ async def health():
  
 @app.post("/api/extract", response_model=ExtractionResponse)
 async def extract(file: UploadFile = File(...)):
-    """
-    Main extraction endpoint.
- 
-    Accepts a PDF file upload and returns structured fields
-    extracted from each page.
- 
-    Args:
-        file: uploaded PDF file (multipart/form-data)
- 
-    Returns:
-        JSON with extracted fields per page
-    """
+   
  
     # ── Validate file type ────────────────────────────────────────────────────
     if not file.filename.endswith(".pdf"):
@@ -107,9 +96,7 @@ async def extract(file: UploadFile = File(...)):
             detail=f"File must be a PDF. Got: {file.filename}"
         )
  
-    # ── Save upload to a temp file ────────────────────────────────────────────
-    # FastAPI gives us the file as a stream — we need to save it to disk
-    # temporarily because pdf2image needs a real file path not a stream.
+    
     tmp_path = None
     try:
         # Create a temporary file with .pdf extension
