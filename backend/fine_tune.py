@@ -149,6 +149,133 @@ def train_epoch(model, loader, omptimizer, scheduler):
     total_loss = 0.0
     total_acc  = 0.0
 
+    
+
+
+
+
+
+
+
+
+
+
+
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# 7. MAIN TRAINING LOOP
+# ─────────────────────────────────────────────────────────────────────────────
+def main():
+    print(f"\n{'='*52}")
+    print(f"  LayoutLMv2 Fine-tuning on FUNSD")
+    print(f"  Device: {cfg.device}")
+    print(f"  Epochs: {cfg.epochs}  |  Batch size: {cfg.batch_size}")
+    print(f"{'='*52}\n")
+ 
+    # ── Load processor ────────────────────────────────────────────────────────
+    print("Loading processor...")
+    processor = LayoutLMv2Processor.from_pretrained(
+        cfg.model_name,
+        revision="no_ocr",
+    )
+ 
+    # ── Load datasets ─────────────────────────────────────────────────────────
+    train_ds = FUNSDDataset("train", processor)
+    val_ds   = FUNSDDataset("test",  processor)
+ 
+    train_loader = DataLoader(
+        train_ds,
+        batch_size=cfg.batch_size,
+        shuffle=True,
+    )
+    val_loader = DataLoader(
+        val_ds,
+        batch_size=cfg.batch_size,
+        shuffle=False,
+    )
+ 
+    # ── Load model ────────────────────────────────────────────────────────────
+    print("Loading LayoutLMv2 model...")
+    model = LayoutLMv2ForTokenClassification.from_pretrained(
+        cfg.model_name,
+        num_labels=cfg.num_labels,
+        id2label=cfg.id2label,
+        label2id=cfg.label2id,
+        ignore_mismatched_sizes=True,
+    )
+    model = model.to(cfg.device)
+ 
+    # ── Optimizer + scheduler ─────────────────────────────────────────────────
+    # AdamW is the standard optimizer for fine-tuning transformers
+    # It's Adam with weight decay — prevents overfitting
+    optimizer = AdamW(model.parameters(), lr=cfg.lr)
+ 
+    # LinearLR gradually warms up the learning rate over training
+    # This is standard practice for transformer fine-tuning —
+    # starting with a small LR prevents destabilizing pretrained weights
+    total_steps = len(train_loader) * cfg.epochs
+    scheduler   = LinearLR(
+        optimizer,
+        start_factor=0.1,
+        end_factor=1.0,
+        total_iters=total_steps // 10,  # warm up over 10% of training
+    )
+ 
+    # ── Training loop ─────────────────────────────────────────────────────────
+    train_losses, val_losses = [], []
+    train_accs,   val_accs   = [], []
+    best_val_loss = float("inf")
+ 
+    print(f"\nStarting training for {cfg.epochs} epochs...\n")
+ 
+    for epoch in range(cfg.epochs):
+        print(f"Epoch [{epoch+1}/{cfg.epochs}]")
+ 
+        train_loss, train_acc = train_epoch(
+            model, train_loader, optimizer, scheduler
+        )
+        val_loss, val_acc = val_epoch(model, val_loader)
+ 
+        print(
+            f"  train loss={train_loss:.4f}  acc={train_acc:.3f}"
+            f"  |  val loss={val_loss:.4f}  acc={val_acc:.3f}"
+        )
+ 
+        train_losses.append(train_loss)
+        val_losses.append(val_loss)
+        train_accs.append(train_acc)
+        val_accs.append(val_acc)
+ 
+        # Save best model
+        if val_loss < best_val_loss:
+            best_val_loss = val_loss
+            model.save_pretrained(cfg.checkpoint_dir)
+            processor.save_pretrained(cfg.checkpoint_dir)
+            print(f"  [ckpt] Best model saved → {cfg.checkpoint_dir}")
+ 
+        # Periodic checkpoint
+        if (epoch + 1) % cfg.save_every == 0:
+            epoch_dir = f"{cfg.checkpoint_dir}_epoch{epoch+1}"
+            model.save_pretrained(epoch_dir)
+            print(f"  [ckpt] Epoch checkpoint → {epoch_dir}")
+ 
+    # ── Final summary ──────────────────────────────────────────────────────
+    print(f"\nTraining complete!")
+    print(f"Best val loss: {best_val_loss:.4f}")
+    print(f"Model saved to: {cfg.checkpoint_dir}")
+ 
+    plot_metrics(
+        train_losses, val_losses,
+        train_accs, val_accs,
+        cfg.metrics_path
+    )
+ 
+ 
+if __name__ == "__main__":
+    main()
+ 
+
 
 
 
