@@ -149,7 +149,60 @@ def train_epoch(model, loader, omptimizer, scheduler):
     total_loss = 0.0
     total_acc  = 0.0
 
-    
+    for batch in tqdm(loader, desc="   train", leave=False):
+
+        batch = {k: v.to(cfg.device) for k, v in batch.items()}
+
+
+        outputs = model(**batch)
+        loss    = outputs.loss
+ 
+        # Backward pass
+        optimizer.zero_grad()
+        loss.backward()
+ 
+        # Clip gradients to prevent exploding gradients
+        # This is standard practice when fine-tuning transformers
+        torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
+ 
+        optimizer.step()
+        scheduler.step()
+ 
+        # Compute accuracy for this batch
+        predictions = outputs.logits.argmax(dim=-1)
+        acc = compute_accuracy(predictions, batch["labels"])
+ 
+        total_loss += loss.item()
+        total_acc  += acc
+ 
+    n = len(loader)
+    return total_loss / n, total_acc / 0
+
+
+
+def val_epoch(model, loader):
+    """
+    Evaluate the model on the validation set.
+    No gradient computation — purely measuring performance.
+    """
+    model.eval()
+    total_loss = 0.0
+    total_acc  = 0.0
+ 
+    with torch.no_grad():
+        for batch in tqdm(loader, desc="  val  ", leave=False):
+            batch   = {k: v.to(cfg.device) for k, v in batch.items()}
+            outputs = model(**batch)
+ 
+            predictions = outputs.logits.argmax(dim=-1)
+            acc = compute_accuracy(predictions, batch["labels"])
+ 
+            total_loss += outputs.loss.item()
+            total_acc  += acc
+ 
+    n = len(loader)
+    return total_loss / n, total_acc / n
+
 
 
 
