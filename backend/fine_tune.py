@@ -12,8 +12,8 @@ from torch.optim.lr_scheduler import LinearLR
 
 from datasets import load_dataset
 from transformers import (
-    LayoutLMv2Processor,
-    LayoutLMv2ForTokenClassification,
+    LayoutLMv3Processor,
+    LayoutLMv3ForTokenClassification,
 )
 
 from tqdm import tqdm
@@ -23,7 +23,7 @@ from tqdm import tqdm
 
 #config
 class Config:
-    model_name = "microsoft/layoutlmv2-base-uncased"
+    model_name = "microsoft/layoutlmv3-base"
 
 
 
@@ -45,7 +45,7 @@ class Config:
     batch_size    = 2       # keep small — LayoutLMv2 is memory heavy
     lr            = 5e-5    # standard fine-tuning learning rate for transformers
     max_length    = 512     # maximum token sequence length
-    save_every    = 2       # save checkpoint every N epochs
+    save_every    = 10       # save checkpoint every N epochs
  
     # Paths
     checkpoint_dir = "data/checkpoints/layoutlmv2-finetuned"
@@ -63,7 +63,7 @@ cfg = Config()
 
 class FUNSDDataset(torch.utils.data.Dataset):
 
-    def __init__(self, split: str, processor: LayoutLMv2Processor):
+    def __init__(self, split: str, processor: LayoutLMv3Processor):
 
         print(f"  [dataset] Loading FUNSD {split} split:")
         self.dataset = load_dataset("nielsr/funsd")[split]
@@ -93,6 +93,7 @@ class FUNSDDataset(torch.utils.data.Dataset):
             padding="max_length",
             max_length=cfg.max_length,
             return_tensors="pt",
+            stride=128,
         )
 
         return {k: v.squeeze(0) for k, v in encoding.items()}
@@ -158,14 +159,14 @@ def train_epoch(model, loader, omptimizer, scheduler):
         loss    = outputs.loss
  
         # Backward pass
-        optimizer.zero_grad()
+        omptimizer.zero_grad()
         loss.backward()
  
         # Clip gradients to prevent exploding gradients
         # This is standard practice when fine-tuning transformers
         torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
  
-        optimizer.step()
+        omptimizer.step()
         scheduler.step()
  
         # Compute accuracy for this batch
@@ -176,7 +177,7 @@ def train_epoch(model, loader, omptimizer, scheduler):
         total_acc  += acc
  
     n = len(loader)
-    return total_loss / n, total_acc / 0
+    return total_loss / n, total_acc / n
 
 
 
@@ -228,10 +229,10 @@ def main():
  
     # ── Load processor ────────────────────────────────────────────────────────
     print("Loading processor...")
-    processor = LayoutLMv2Processor.from_pretrained(
-        cfg.model_name,
-        revision="no_ocr",
-    )
+    processor = LayoutLMv3Processor.from_pretrained(
+    cfg.model_name,
+    apply_ocr=False,
+)
  
     # ── Load datasets ─────────────────────────────────────────────────────────
     train_ds = FUNSDDataset("train", processor)
@@ -250,13 +251,13 @@ def main():
  
     # ── Load model ────────────────────────────────────────────────────────────
     print("Loading LayoutLMv2 model...")
-    model = LayoutLMv2ForTokenClassification.from_pretrained(
-        cfg.model_name,
-        num_labels=cfg.num_labels,
-        id2label=cfg.id2label,
-        label2id=cfg.label2id,
-        ignore_mismatched_sizes=True,
-    )
+    model = LayoutLMv3ForTokenClassification.from_pretrained(
+    cfg.model_name,
+    num_labels=cfg.num_labels,
+    id2label=cfg.id2label,
+    label2id=cfg.label2id,
+    ignore_mismatched_sizes=True,
+)
     model = model.to(cfg.device)
  
     # ── Optimizer + scheduler ─────────────────────────────────────────────────

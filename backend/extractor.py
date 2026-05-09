@@ -2,8 +2,8 @@
 import torch
 from PIL import Image
 from transformers import (
-    LayoutLMv2Processor,
-    LayoutLMv2ForTokenClassification,
+    LayoutLMv3Processor,
+    LayoutLMv3ForTokenClassification,
 )
 from typing import List, Dict
 
@@ -34,24 +34,24 @@ DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
 
 
 def load_extractor():
-    print("[extractor] Loading LayoutLMv2 processor...")
-    processor = LayoutLMv2Processor.from_pretrained(
-        "microsoft/layoutlmv2-base-uncased",
-        revision="no_ocr",
+    print("[extractor] Loading LayoutLMv3 processor...")
+    processor = LayoutLMv3Processor.from_pretrained(
+        "microsoft/layoutlmv3-base",
+        apply_ocr=False,
     )
 
-    print("[extractor] Loading LayoutLMv2 model...")
-    model = LayoutLMv2ForTokenClassification.from_pretrained(
-        "microsoft/layoutlmv2-base-uncased",
+    print("[extractor] Loading LayoutLMv3 model...")
+    model = LayoutLMv3ForTokenClassification.from_pretrained(
+        "microsoft/layoutlmv3-base",
         num_labels=NUM_LABELS,
         id2label=ID2LABEL,
         label2id=LABEL2ID,
         ignore_mismatched_sizes=True,
     )
- 
+
     model = model.to(DEVICE)
     model.eval()
- 
+
     print(f"[extractor] Model ready on {DEVICE}")
     return processor, model
 
@@ -71,7 +71,8 @@ def encode_page(processor, page:Dict) -> Dict:
         padding="max_length",
         max_length=512,
         return_tensors="pt",
-    )
+        stride=128,
+)
 
     encoding = {k: v.to(DEVICE) for k, v in encoding.items()}
     return encoding
